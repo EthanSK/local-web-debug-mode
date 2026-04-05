@@ -1,9 +1,19 @@
 ---
 name: "local-web-debug-mode"
 description: "Use when debugging a local web app by starting its normal dev server plus a dedicated local debug ingest server, forwarding temporary dev-only client logs there, and inspecting live NDJSON logs without asking the user to paste browser output."
+allowed-tools:
+  - Bash(*)
+  - Read
+  - Edit
+  - Write
+  - Glob
+  - Grep
 ---
 
 # Local Web Debug Mode
+
+> **Cross-compatible**: Works with both **OpenAI Codex CLI** and **Claude Code**. This file
+> follows the shared SKILL.md convention. Codex-specific UI metadata lives in `agents/openai.yaml`.
 
 Use this skill for a Cursor-style debug loop on local web apps.
 The default approach is:
@@ -30,9 +40,9 @@ The default approach is:
 - Use an explicit repro loop: wait for the user to say they reproduced the issue before interpreting logs, then implement or propose the next fix, then ask them to retry.
 - Keep the user interaction explicit: ask them to reproduce the issue and reply when ready, then do not inspect the logs until they confirm.
 - After each inspection, prefer trying the smallest likely fix and then immediately re-enter the repro loop if needed.
-- Track server ownership explicitly for the current debug run: for each app or ingest server, record whether Codex reused an existing process or started a new one.
-- Never stop a preexisting server that Codex merely reused.
-- Before finishing the task, stop every debug server that Codex started unless the user explicitly asked to keep it running.
+- Track server ownership explicitly for the current debug run: for each app or ingest server, record whether the agent reused an existing process or started a new one.
+- Never stop a preexisting server that the agent merely reused.
+- Before finishing the task, stop every debug server that the agent started unless the user explicitly asked to keep it running.
 
 ## Prerequisites
 
@@ -50,12 +60,12 @@ If any of those commands fail, stop and ask the user to fix their Node/npm setup
 
 ## Workflow
 
-1. Inspect repo instructions first: `AGENTS.md`, `README`, `package.json`, and workspace config.
+1. Inspect repo instructions first: `AGENTS.md`, `CLAUDE.md`, `README`, `package.json`, and workspace config.
 2. Identify the canonical dev server command and the expected local URL.
 3. Check whether each required port or health endpoint is already live before starting anything.
-4. Reuse an existing dev server if it is already running, and mark it as `reused` in your session notes. Do not spawn duplicates blindly.
-5. Start the app in its normal local dev mode only if it was not already live, and mark it as `owned` in your session notes.
-6. Start the bundled dedicated ingest server on localhost before patching the frontend bridge, unless it is already live and healthy. Mark it as `owned` or `reused` in your session notes.
+4. Reuse an existing dev server if it is already running and mark it as `reused`. Do not spawn duplicates blindly.
+5. Start the app in its normal local dev mode only if it was not already live and mark it as `owned`.
+6. Start the bundled dedicated ingest server on localhost before patching the frontend bridge, unless it is already live and healthy. Mark it as `owned` or `reused`.
 7. Add a tiny frontend bridge that forwards `console`, `error`, and `unhandledrejection` events with `fetch`.
 8. Ask the user to reproduce the issue and tell you when the repro is complete.
 9. Once the user confirms, inspect the new NDJSON log entries for that repro attempt.
@@ -96,7 +106,7 @@ Use this minimal lifecycle:
    - Check the expected app and ingest ports first.
    - If a server is already running, treat it as `reused`.
 2. Start
-   - If Codex starts a server, treat it as `owned`.
+   - If the agent starts a server, treat it as `owned`.
    - Record enough information to stop it later: tool session id, port, and command.
 3. Debug
    - Keep temporary log forwarding only as long as the debug loop needs it.
@@ -112,14 +122,27 @@ Practical rule:
 
 ## Dedicated Ingest Server
 
-Cursor-style runtime log capture works better with a separate lightweight ingest server than with app-specific debug routes. Start the bundled script first:
+Cursor-style runtime log capture works better with a separate lightweight ingest server than with app-specific debug routes. Start the bundled script first.
+
+Resolve the skill directory dynamically based on which agent is running:
 
 ```bash
-export CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
-export DEBUG_LOG_PORT="${DEBUG_LOG_PORT:-7242}"
-export DEBUG_LOG_DIR="${DEBUG_LOG_DIR:-$PWD/.codex/debug-runtime-logs}"
+# Works for both Codex CLI ($CODEX_HOME/skills/) and Claude Code (~/.claude/skills/)
+if [ -n "$CODEX_HOME" ] && [ -d "$CODEX_HOME/skills/local-web-debug-mode" ]; then
+  SKILL_DIR="$CODEX_HOME/skills/local-web-debug-mode"
+elif [ -d "$HOME/.claude/skills/local-web-debug-mode" ]; then
+  SKILL_DIR="$HOME/.claude/skills/local-web-debug-mode"
+elif [ -d "$HOME/.codex/skills/local-web-debug-mode" ]; then
+  SKILL_DIR="$HOME/.codex/skills/local-web-debug-mode"
+else
+  echo "Error: local-web-debug-mode skill directory not found" >&2
+  exit 1
+fi
 
-node "$CODEX_HOME/skills/local-web-debug-mode/scripts/debug_ingest_server.mjs" \
+export DEBUG_LOG_PORT="${DEBUG_LOG_PORT:-7242}"
+export DEBUG_LOG_DIR="${DEBUG_LOG_DIR:-$PWD/.debug-runtime-logs}"
+
+node "$SKILL_DIR/scripts/debug_ingest_server.mjs" \
   --host 127.0.0.1 \
   --port "$DEBUG_LOG_PORT" \
   --output-dir "$DEBUG_LOG_DIR"
@@ -132,7 +155,7 @@ Expected endpoints:
 
 Default output:
 
-- `$PWD/.codex/debug-runtime-logs/<sessionId>.ndjson`
+- `$PWD/.debug-runtime-logs/<sessionId>.ndjson`
 
 Only fall back to an app-server debug route if a separate ingest process is genuinely blocked.
 
@@ -163,7 +186,7 @@ Adapt only the dev gating, ingest URL, and session id wiring to the target app.
 Use the session id to read the live runtime logs:
 
 ```bash
-tail -f ".codex/debug-runtime-logs/${SESSION_ID}.ndjson"
+tail -f ".debug-runtime-logs/${SESSION_ID}.ndjson"
 ```
 
 ## Repo-Specific Notes

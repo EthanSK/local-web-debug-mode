@@ -18,7 +18,7 @@ const getArg = (name, fallback) => {
 const host = getArg('host', '127.0.0.1');
 const port = Number(getArg('port', '7242'));
 const outputDir = path.resolve(
-  getArg('output-dir', path.join(process.cwd(), '.codex/debug-runtime-logs')),
+  getArg('output-dir', path.join(process.cwd(), '.debug-runtime-logs')),
 );
 
 if (!Number.isFinite(port) || port <= 0) {

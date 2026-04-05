@@ -1,5 +1,5 @@
-const DEBUG_LOG_SESSION_KEY = 'codex_debug_session';
-const DEBUG_LOG_INITIALIZED_KEY = '__codexDebugLogForwardingInitialized';
+const DEBUG_LOG_SESSION_KEY = 'debug_log_session';
+const DEBUG_LOG_INITIALIZED_KEY = '__debugLogForwardingInitialized';
 const DEBUG_LOG_DEFAULT_SESSION_ID = 'frontend-dev';
 const DEBUG_LOG_DEFAULT_INGEST_URL = 'http://127.0.0.1:7242/ingest-client-logs';
 
