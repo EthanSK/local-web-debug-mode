@@ -1,0 +1,7 @@
+interface:
+  display_name: "Local Web Debug Mode"
+  short_description: "Debug local apps with a dedicated ingest server"
+  default_prompt: "Use $local-web-debug-mode to start my local app, spin up the dedicated local debug ingest server, add temporary client log forwarding to it, explicitly wait for me to say I reproduced the issue, inspect only the fresh NDJSON logs from that repro, implement the likely fix automatically, and then ask me to retry until the bug is resolved."
+
+policy:
+  allow_implicit_invocation: false
