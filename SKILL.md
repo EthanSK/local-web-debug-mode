@@ -40,9 +40,8 @@ The default approach is:
 - Use an explicit repro loop: wait for the user to say they reproduced the issue before interpreting logs, then implement or propose the next fix, then ask them to retry.
 - Keep the user interaction explicit: ask them to reproduce the issue and reply when ready, then do not inspect the logs until they confirm.
 - After each inspection, prefer trying the smallest likely fix and then immediately re-enter the repro loop if needed.
-<<<<<<< HEAD
 - Do not write NDJSON logs into the workspace by default. Prefer a temp directory or a fixed global Codex debug directory outside the repo.
-- If you intentionally want repo-local output, verify that the exact path is already ignored before writing any logs there.
+- If you intentionally want repo-local output, verify that the exact path is already ignored before writing any logs there, and add the ignore rule first if it is missing.
 - Track server ownership explicitly for the current debug run: for each app or ingest server, record whether the agent reused an existing process or started a new one.
 - Never stop a preexisting server that the agent merely reused.
 - Before finishing the task, stop every debug server that the agent started unless the user explicitly asked to keep it running.
@@ -69,13 +68,14 @@ If any of those commands fail, stop and ask the user to fix their Node/npm setup
 4. Reuse an existing dev server if it is already running and mark it as `reused`. Do not spawn duplicates blindly.
 5. Start the app in its normal local dev mode only if it was not already live and mark it as `owned`.
 6. Start the bundled dedicated ingest server on localhost before patching the frontend bridge, unless it is already live and healthy. Mark it as `owned` or `reused`.
-7. Add a tiny frontend bridge that forwards `console`, `error`, and `unhandledrejection` events with `fetch`.
-8. Ask the user to reproduce the issue and tell you when the repro is complete.
-9. Once the user confirms, inspect the new NDJSON log entries for that repro attempt.
-10. Summarize runtime evidence, then implement the smallest likely fix if the user asked you to debug rather than only investigate.
-11. Tell the user what to retry, wait for the next repro result, and do not silently inspect stale logs from an earlier attempt.
-12. If the bug persists, start a fresh repro cycle and inspect only the new logs from that attempt.
-13. Before the final response, remove temporary instrumentation and stop any `owned` debug servers. Verify their ports are no longer listening.
+7. If you intentionally choose a repo-local debug log path, verify it is already ignored. If it is not, add the exact ignore entry before the first repro run.
+8. Add a tiny frontend bridge that forwards `console`, `error`, and `unhandledrejection` events with `fetch`.
+9. Ask the user to reproduce the issue and tell you when the repro is complete.
+10. Once the user confirms, inspect the new NDJSON log entries for that repro attempt.
+11. Summarize runtime evidence, then implement the smallest likely fix if the user asked you to debug rather than only investigate.
+12. Tell the user what to retry, wait for the next repro result, and do not silently inspect stale logs from an earlier attempt.
+13. If the bug persists, start a fresh repro cycle and inspect only the new logs from that attempt.
+14. Before the final response, remove temporary instrumentation and stop any `owned` debug servers. Verify their ports are no longer listening.
 
 ## Repro Loop
 
@@ -161,6 +161,20 @@ Default output:
 - `${TMPDIR:-/tmp}/codex-local-web-debug-mode/<sessionId>.ndjson`
 
 Only fall back to an app-server debug route if a separate ingest process is genuinely blocked.
+
+## Gitignore Safety
+
+If you intentionally use a repo-local debug log directory, make this check before the first repro run:
+
+```bash
+git check-ignore -v "$DEBUG_LOG_DIR" "${DEBUG_LOG_DIR}/${SESSION_ID}.ndjson"
+```
+
+If nothing is reported, add an ignore entry before writing logs. Prefer the narrowest rule that matches the chosen path, for example:
+
+- `.debug-runtime-logs/`
+- `.codex/debug-runtime-logs/`
+- `*.ndjson` only if broad NDJSON ignores are acceptable for that repo
 
 ## Preferred Logging Pattern
 
