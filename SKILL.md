@@ -40,6 +40,9 @@ The default approach is:
 - Use an explicit repro loop: wait for the user to say they reproduced the issue before interpreting logs, then implement or propose the next fix, then ask them to retry.
 - Keep the user interaction explicit: ask them to reproduce the issue and reply when ready, then do not inspect the logs until they confirm.
 - After each inspection, prefer trying the smallest likely fix and then immediately re-enter the repro loop if needed.
+<<<<<<< HEAD
+- Do not write NDJSON logs into the workspace by default. Prefer a temp directory or a fixed global Codex debug directory outside the repo.
+- If you intentionally want repo-local output, verify that the exact path is already ignored before writing any logs there.
 - Track server ownership explicitly for the current debug run: for each app or ingest server, record whether the agent reused an existing process or started a new one.
 - Never stop a preexisting server that the agent merely reused.
 - Before finishing the task, stop every debug server that the agent started unless the user explicitly asked to keep it running.
@@ -140,7 +143,7 @@ else
 fi
 
 export DEBUG_LOG_PORT="${DEBUG_LOG_PORT:-7242}"
-export DEBUG_LOG_DIR="${DEBUG_LOG_DIR:-$PWD/.debug-runtime-logs}"
+export DEBUG_LOG_DIR="${DEBUG_LOG_DIR:-${TMPDIR:-/tmp}/codex-local-web-debug-mode}"
 
 node "$SKILL_DIR/scripts/debug_ingest_server.mjs" \
   --host 127.0.0.1 \
@@ -155,7 +158,7 @@ Expected endpoints:
 
 Default output:
 
-- `$PWD/.debug-runtime-logs/<sessionId>.ndjson`
+- `${TMPDIR:-/tmp}/codex-local-web-debug-mode/<sessionId>.ndjson`
 
 Only fall back to an app-server debug route if a separate ingest process is genuinely blocked.
 
@@ -186,7 +189,7 @@ Adapt only the dev gating, ingest URL, and session id wiring to the target app.
 Use the session id to read the live runtime logs:
 
 ```bash
-tail -f ".debug-runtime-logs/${SESSION_ID}.ndjson"
+tail -f "${DEBUG_LOG_DIR}/${SESSION_ID}.ndjson"
 ```
 
 ## Repo-Specific Notes

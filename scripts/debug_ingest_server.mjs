@@ -2,6 +2,7 @@
 
 import fs from 'node:fs/promises';
 import http from 'node:http';
+import os from 'node:os';
 import path from 'node:path';
 
 const args = process.argv.slice(2);
@@ -18,7 +19,7 @@ const getArg = (name, fallback) => {
 const host = getArg('host', '127.0.0.1');
 const port = Number(getArg('port', '7242'));
 const outputDir = path.resolve(
-  getArg('output-dir', path.join(process.cwd(), '.debug-runtime-logs')),
+  getArg('output-dir', path.join(os.tmpdir(), 'codex-local-web-debug-mode')),
 );
 
 if (!Number.isFinite(port) || port <= 0) {
