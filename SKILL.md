@@ -21,6 +21,7 @@ The default approach is:
 1. Start the app in its normal local dev mode.
 2. Start a separate lightweight local debug ingest server for runtime logs.
 3. Add minimal dev-only client log forwarding from the frontend to that ingest server.
+   Default to inline, callsite-local `fetch()` logging near the suspected code path instead of editing app bootstrap files.
 4. Ask the user to reproduce the issue and confirm when they are ready.
 5. Read the forwarded logs from the NDJSON file or ingest server output only after the user says they reproduced it.
 6. Summarize the runtime evidence, implement the most likely fix automatically unless the user asked for investigation only, and tell the user exactly what to retry.
@@ -35,6 +36,8 @@ The default approach is:
 - Do not ask the user to paste browser console output if temporary client log forwarding can be added quickly.
 - Prefer a dedicated localhost ingest server over patching the app server with ad hoc debug routes.
 - Keep the instrumentation surgical, strongly typed, and dev-only.
+- Prefer inline, callsite-local `fetch()` logging over modifying `main.ts`, app config, root layouts, or other bootstrap files.
+- Only use a global console/error bridge when the bug spans unknown code paths, happens before the suspected code runs, or needs broad startup capture.
 - Prefer batching logs and appending NDJSON locally over spamming the terminal.
 - If you add temporary logging code, remove it before finishing unless the user asks to keep it.
 - Use an explicit repro loop: wait for the user to say they reproduced the issue before interpreting logs, then implement or propose the next fix, then ask them to retry.
@@ -69,7 +72,9 @@ If any of those commands fail, stop and ask the user to fix their Node/npm setup
 5. Start the app in its normal local dev mode only if it was not already live and mark it as `owned`.
 6. Start the bundled dedicated ingest server on localhost before patching the frontend bridge, unless it is already live and healthy. Mark it as `owned` or `reused`.
 7. If you intentionally choose a repo-local debug log path, verify it is already ignored. If it is not, add the exact ignore entry before the first repro run.
-8. Add a tiny frontend bridge that forwards `console`, `error`, and `unhandledrejection` events with `fetch`.
+8. Add temporary frontend logging.
+   Default to a tiny inline helper at the suspect code path that posts structured events with `fetch`.
+   Only fall back to a broader global bridge if inline logging will miss the failure.
 9. Ask the user to reproduce the issue and tell you when the repro is complete.
 10. Once the user confirms, inspect the new NDJSON log entries for that repro attempt.
 11. Summarize runtime evidence, then implement the smallest likely fix if the user asked you to debug rather than only investigate.
@@ -84,7 +89,7 @@ Use this loop explicitly:
 1. Setup
    - Start or reuse the app server.
    - Start or reuse the ingest server.
-   - Add the temporary frontend bridge.
+   - Add temporary inline logging at the suspect code path, or a broader bridge only if the repro requires it.
 2. Wait
    - Tell the user to reproduce the issue and reply when done.
    - Do not over-interpret stale logs from earlier attempts.
@@ -181,12 +186,11 @@ If nothing is reported, add an ignore entry before writing logs. Prefer the narr
 Use this shape unless the repo already has a better existing pattern:
 
 - Frontend:
-  - wrap `console.log/info/warn/error/debug`
-  - capture `window` `error`
-  - capture `window` `unhandledrejection`
-  - batch events in memory
-  - `fetch()` them to the dedicated localhost ingest server
-  - preserve the original console behavior
+  - default: add a tiny inline helper or direct `fetch()` call close to the suspected code path
+  - send structured events to the dedicated localhost ingest server
+  - keep the helper local, dev-only, and easy to delete
+  - do not modify bootstrap files by default
+  - fallback: wrap `console.log/info/warn/error/debug`, capture `window` `error`, and capture `window` `unhandledrejection` only when broad capture is actually needed
 - Debug ingest server:
   - accept batched JSON log events
   - append them as NDJSON to a local file
@@ -195,7 +199,8 @@ Use this shape unless the repo already has a better existing pattern:
 
 ## Frontend Example
 
-Use the bundled reference bridge in `references/client-log-forwarding.example.ts`.
+Use `references/inline-fetch-log.example.ts` first for callsite-local logging.
+Only use `references/client-log-forwarding.example.ts` when you truly need broad console/error capture across the app.
 Adapt only the dev gating, ingest URL, and session id wiring to the target app.
 
 ## Tail The Logs
