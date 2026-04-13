@@ -54,18 +54,17 @@ The default approach is:
 
 When browser inspection is part of the debug loop, try Chrome DevTools MCP before considering any fallback browser automation.
 
-Use this recovery order when Chrome DevTools MCP is failing:
+Use this recovery order when `chrome-devtools/list_pages` is failing:
 
 1. Call `chrome-devtools/list_pages` first.
-2. If it hangs, times out, or returns `Transport closed`, check for stale `chrome-devtools-mcp` or `npm exec chrome-devtools-mcp@latest --autoConnect` processes and kill the old duplicates before retrying.
-3. If the retry still fails, inspect the user's currently open browser tabs left to right. Some tabs can poison page enumeration by hanging on `Network.enable`.
+2. If it hangs, times out, or returns `Transport closed`, inspect the user's currently open browser tabs left to right.
+3. Treat unrelated open tabs as the primary suspect. Some tabs can poison page enumeration by hanging on `Network.enable`.
 4. Close or replace only the confirmed bad tab or tabs, then retry `list_pages`.
-5. If a fresh Codex process can reach Chrome DevTools MCP but the current thread still returns `Transport closed`, treat the current thread's MCP transport as stale. Continue in a fresh thread or subprocess instead of blaming the browser.
 
 Observed failure mode worth remembering:
 
 - `chrome-devtools/list_pages` can fail even when the target localhost app is healthy, because an unrelated open tab can stall the MCP server on `Network.enable`.
-- In that case the fix is usually bad-tab cleanup, not switching to Playwright.
+- In that case the real fix is bad-tab cleanup, not process cleanup or switching to Playwright.
 
 ## Prerequisites
 
