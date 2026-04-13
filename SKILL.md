@@ -21,6 +21,7 @@ The default approach is:
 1. Start the app in its normal local dev mode.
 2. Start a separate lightweight local debug ingest server for runtime logs.
 3. Add minimal dev-only client log forwarding from the frontend to that ingest server.
+   Do this inline at the suspected code path with direct `fetch()` logging instead of editing app bootstrap files.
 4. Ask the user to reproduce the issue and confirm when they are ready.
 5. Read the forwarded logs from the NDJSON file or ingest server output only after the user says they reproduced it.
 6. Summarize the runtime evidence, implement the most likely fix automatically unless the user asked for investigation only, and tell the user exactly what to retry.
@@ -29,12 +30,15 @@ The default approach is:
 
 ## Rules
 
+- Prefer the Chrome DevTools MCP attached to the user's real browser first for browser inspection and UI interaction.
 - Do not use Playwright by default.
 - Prefer the repo's documented dev workflow over generic commands.
 - In Nx repos, prefer `nx serve` or existing package scripts over framework binaries.
 - Do not ask the user to paste browser console output if temporary client log forwarding can be added quickly.
 - Prefer a dedicated localhost ingest server over patching the app server with ad hoc debug routes.
 - Keep the instrumentation surgical, strongly typed, and dev-only.
+- Use inline, callsite-local `fetch()` logging at the suspected code path.
+- Do not modify `main.ts`, app config, root layouts, or other bootstrap files for this workflow unless the user explicitly asks for that broader instrumentation.
 - Prefer batching logs and appending NDJSON locally over spamming the terminal.
 - If you add temporary logging code, remove it before finishing unless the user asks to keep it.
 - Use an explicit repro loop: wait for the user to say they reproduced the issue before interpreting logs, then implement or propose the next fix, then ask them to retry.
@@ -45,6 +49,22 @@ The default approach is:
 - Track server ownership explicitly for the current debug run: for each app or ingest server, record whether the agent reused an existing process or started a new one.
 - Never stop a preexisting server that the agent merely reused.
 - Before finishing the task, stop every debug server that the agent started unless the user explicitly asked to keep it running.
+
+## Chrome DevTools MCP Recovery
+
+When browser inspection is part of the debug loop, try Chrome DevTools MCP before considering any fallback browser automation.
+
+Use this recovery order when `chrome-devtools/list_pages` is failing:
+
+1. Call `chrome-devtools/list_pages` first.
+2. If it hangs, times out, or returns `Transport closed`, inspect the user's currently open browser tabs left to right.
+3. Treat unrelated open tabs as the primary suspect. Some tabs can poison page enumeration by hanging on `Network.enable`.
+4. Close or replace only the confirmed bad tab or tabs, then retry `list_pages`.
+
+Observed failure mode worth remembering:
+
+- `chrome-devtools/list_pages` can fail even when the target localhost app is healthy, because an unrelated open tab can stall the MCP server on `Network.enable`.
+- In that case the real fix is bad-tab cleanup, not process cleanup or switching to Playwright.
 
 ## Prerequisites
 
@@ -69,7 +89,9 @@ If any of those commands fail, stop and ask the user to fix their Node/npm setup
 5. Start the app in its normal local dev mode only if it was not already live and mark it as `owned`.
 6. Start the bundled dedicated ingest server on localhost before patching the frontend bridge, unless it is already live and healthy. Mark it as `owned` or `reused`.
 7. If you intentionally choose a repo-local debug log path, verify it is already ignored. If it is not, add the exact ignore entry before the first repro run.
-8. Add a tiny frontend bridge that forwards `console`, `error`, and `unhandledrejection` events with `fetch`.
+8. Add temporary frontend logging inline at the suspect code path.
+   Post structured events with `fetch`.
+   Keep the instrumentation in the same file or feature area as the suspected bug whenever possible.
 9. Ask the user to reproduce the issue and tell you when the repro is complete.
 10. Once the user confirms, inspect the new NDJSON log entries for that repro attempt.
 11. Summarize runtime evidence, then implement the smallest likely fix if the user asked you to debug rather than only investigate.
@@ -84,7 +106,7 @@ Use this loop explicitly:
 1. Setup
    - Start or reuse the app server.
    - Start or reuse the ingest server.
-   - Add the temporary frontend bridge.
+   - Add temporary inline logging at the suspect code path.
 2. Wait
    - Tell the user to reproduce the issue and reply when done.
    - Do not over-interpret stale logs from earlier attempts.
@@ -181,12 +203,10 @@ If nothing is reported, add an ignore entry before writing logs. Prefer the narr
 Use this shape unless the repo already has a better existing pattern:
 
 - Frontend:
-  - wrap `console.log/info/warn/error/debug`
-  - capture `window` `error`
-  - capture `window` `unhandledrejection`
-  - batch events in memory
-  - `fetch()` them to the dedicated localhost ingest server
-  - preserve the original console behavior
+  - add a tiny inline helper or direct `fetch()` call close to the suspected code path
+  - send structured events to the dedicated localhost ingest server
+  - keep the helper local, dev-only, and easy to delete
+  - do not modify bootstrap files for this workflow unless the user explicitly asks for broader instrumentation
 - Debug ingest server:
   - accept batched JSON log events
   - append them as NDJSON to a local file
@@ -195,8 +215,9 @@ Use this shape unless the repo already has a better existing pattern:
 
 ## Frontend Example
 
-Use the bundled reference bridge in `references/client-log-forwarding.example.ts`.
-Adapt only the dev gating, ingest URL, and session id wiring to the target app.
+Use `references/inline-fetch-log.example.ts` for callsite-local logging.
+Do not use `references/client-log-forwarding.example.ts` unless the user explicitly asks for a broader app-level bridge.
+Adapt only the dev gating, ingest URL, and session id wiring to the target file.
 
 ## Tail The Logs
 
