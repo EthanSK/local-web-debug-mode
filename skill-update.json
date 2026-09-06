@@ -1,0 +1,6 @@
+{
+  "repository": "https://github.com/EthanSK/local-web-debug-mode",
+  "branch": "main",
+  "path": ".",
+  "distribution": "git-or-copy"
+}
